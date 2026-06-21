@@ -93,14 +93,27 @@ export class ProjectProvisioningWorker implements OnModuleInit, OnModuleDestroy 
 
   private async createDocumentSpace(projectId: string, userId: string) {
     console.log(`[Handler: CreateDocumentSpaceHandler] Allocating documents Wiki space`);
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { workspaceId: true },
+    });
+    const workspaceId = project?.workspaceId || '';
+    
     await this.prisma.document.create({
       data: {
+        workspaceId,
         projectId,
         title: 'Wiki Home',
-        content: '# Welcome to the Project wiki!\nStart editing document spaces to construct knowledge bases.',
+        slug: 'wiki-home',
         isWiki: true,
-        creatorId: userId,
-        updaterId: userId,
+        createdBy: userId,
+        updatedBy: userId,
+        contents: {
+          create: {
+            plainText: '# Welcome to the Project wiki!\nStart editing document spaces to construct knowledge bases.',
+            version: 1,
+          },
+        },
       },
     });
   }

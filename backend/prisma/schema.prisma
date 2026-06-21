@@ -93,6 +93,8 @@ enum NotificationType {
   SPRINT_COMPLETED
   DOCUMENT_UPDATED
   CHAT_MESSAGE
+  INTEGRATION_SUSPENDED
+  BILLING_ALERT
 }
 
 enum DependencyType {
@@ -170,6 +172,17 @@ model User {
   reactions           MessageReaction[]
   reads               MessageRead[]
   pinnedMessages      PinnedMessage[]
+  aiConversations     AIConversation[]
+  documentPresences   DocumentPresence[]
+  documentComments    DocumentComment[]
+  documentPermissions DocumentPermission[]
+  documentFavorites   DocumentFavorite[]
+  documentVersions    DocumentVersion[]
+  deviceSessions      DeviceSession[]
+  integrationInstallations IntegrationInstallation[]
+  seats                    WorkspaceSeat[]
+  userSessions             UserSession[]
+  mfaRecoveryCodes         MFARecoveryCode[]
 
   @@index([email])
 }
@@ -223,6 +236,16 @@ model Workspace {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   
+  stripeCustomerId     String?             @unique
+  stripeSubscriptionId String?             @unique
+  plan                 SubscriptionPlan    @default(FREE)
+  subscriptionStatus   SubscriptionStatus  @default(ACTIVE)
+  subscriptionPeriodEnd DateTime?
+  trialEndsAt          DateTime?
+  gracePeriodEndsAt    DateTime?
+  aiTokensUsed         Int                 @default(0)
+  storageBytesUsed     BigInt              @default(0)
+  
   members     WorkspaceMember[]
   projects    Project[]
   invitations Invitation[]
@@ -238,6 +261,43 @@ model Workspace {
   auditTrails  AuditTrail[]
   meetings     Meeting[]
   calendarEvents CalendarEvent[]
+  documents           Document[]
+  knowledgeCollections KnowledgeCollection[]
+  aiConversations     AIConversation[]
+  aiAutomations       AIAutomation[]
+  aiAgents            AIAgent[]
+  aiTools             AITool[]
+  aiWorkflows         AgentWorkflow[]
+  aiBudget            AIBudget?
+  aiWorkspaceMemory   AIWorkspaceMemory?
+  documentTemplates   DocumentTemplate[]
+  integrations         Integration[]
+  installations        IntegrationInstallation[]
+  credentials          IntegrationCredential[]
+  webhooks             Webhook[]
+  integrationEvents    IntegrationEvent[]
+  seats                WorkspaceSeat[]
+  snapshots            UsageSnapshot[]
+  contracts            EnterpriseContract[]
+  invoices             SubscriptionInvoice[]
+  
+  organizationId       String?
+  organization         Organization?       @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  ssoProviders         SSOProvider[]
+  scimProvisionings    SCIMProvisioning[]
+  securityPolicy       SecurityPolicy?
+  auditExports         AuditExport[]
+  retentionPolicies    RetentionPolicy[]
+  legalHolds           LegalHold[]
+  dlpPolicies          DLPPolicy[]
+  securityIncidents    SecurityIncident[]
+
+  portfolioId          String?
+  portfolio            Portfolio?          @relation(fields: [portfolioId], references: [id], onDelete: SetNull)
+  objectives           Objective[]
+  kpis                 KPI[]
+  dashboards           Dashboard[]
+  forecasts            Forecast[]
 }
 
 model WorkspaceSettings {
@@ -419,6 +479,7 @@ model Task {
   
   dependencies   TaskDependency[] @relation("TaskSource")
   blockedBy      TaskDependency[] @relation("TaskTarget")
+  documents      Document[]       @relation("TaskDocuments")
 
   @@index([projectId])
   @@index([sprintId])
@@ -520,6 +581,8 @@ model AuditTrail {
   oldValue    Json?
   newValue    Json?
   ipAddress   String?
+  previousHash String?
+  currentHash  String?
   createdAt   DateTime @default(now())
 
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -864,6 +927,7 @@ model Meeting {
   breakoutRooms BreakoutRoom[]
   summaries    MeetingSummary[]
   insights     MeetingInsight[]
+  documents    Document[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -1063,26 +1127,50 @@ model MeetingInsight {
 }
 
 model Document {
-  id          String     @id @default(uuid())
-  projectId   String?
-  parentId    String?    // Hierarchy support
-  title       String
-  content     String     @default("") // Rich text / Block-based content (JSON or MD)
-  isWiki      Boolean    @default(false)
-  isKb        Boolean    @default(false)
-  creatorId   String
-  updaterId   String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  
-  project     Project?   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent      Document?  @relation("DocHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
-  children    Document[] @relation("DocHierarchy")
-  creator     User       @relation("DocumentCreator", fields: [creatorId], references: [id])
-  updater     User       @relation("DocumentUpdater", fields: [updaterId], references: [id])
+  id              String               @id @default(uuid())
+  workspaceId     String
+  projectId       String?
+  parentId        String?              // Hierarchy support
+  meetingId       String?
+  collectionId    String?
+  title           String
+  slug            String
+  icon            String?
+  coverImage      String?
+  createdBy       String
+  updatedBy       String
+  isPublished     Boolean              @default(false)
+  isWiki          Boolean              @default(false)
+  isKnowledgeBase Boolean              @default(false)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
 
+  workspace       Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project         Project?             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  meeting         Meeting?             @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  collection      KnowledgeCollection? @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  parent          Document?            @relation("DocHierarchy", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Document[]           @relation("DocHierarchy")
+  creator         User                 @relation("DocumentCreator", fields: [createdBy], references: [id])
+  updater         User                 @relation("DocumentUpdater", fields: [updatedBy], references: [id])
+  tasks           Task[]               @relation("TaskDocuments")
+  contents        DocumentContent[]
+  presence        DocumentPresence[]
+  permissions     DocumentPermission[]
+  comments        DocumentComment[]
+  versions        DocumentVersion[]
+  favorites       DocumentFavorite[]
+  attachments     DocumentAttachment[]
+  summary         DocumentSummary?
+  embedding       DocumentEmbedding?
+
+  @@index([workspaceId])
   @@index([projectId])
   @@index([parentId])
+  @@index([meetingId])
+  @@index([collectionId])
+  @@index([createdBy])
+  @@index([updatedBy])
 }
 
 model Notification {
@@ -1129,3 +1217,1317 @@ model ActivityLog {
 
   @@index([workspaceId])
 }
+
+model KnowledgeCollection {
+  id          String     @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  icon        String?
+  createdAt   DateTime   @default(now())
+
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  documents   Document[]
+
+  @@index([workspaceId])
+}
+
+model DocumentContent {
+  id              String   @id @default(uuid())
+  documentId      String
+  yjsSnapshot     Bytes?
+  plainText       String
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+
+  document        Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+model DocumentPresence {
+  id             String   @id @default(uuid())
+  documentId     String
+  userId         String
+  cursorPosition String?
+  selectionRange String?
+  lastSeen       DateTime @default(now())
+
+  document       Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([userId])
+}
+
+model DocumentPermission {
+  id          String         @id @default(uuid())
+  documentId  String
+  userId      String?
+  role        WorkspaceRole?
+  canView     Boolean        @default(true)
+  canEdit     Boolean        @default(false)
+  canComment  Boolean        @default(false)
+  canShare    Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+
+  document    Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user        User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([userId])
+}
+
+model DocumentComment {
+  id         String            @id @default(uuid())
+  documentId String
+  userId     String
+  parentId   String?
+  content    String
+  isResolved Boolean           @default(false)
+  createdAt  DateTime          @default(now())
+
+  document   Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent     DocumentComment?  @relation("CommentThreads", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    DocumentComment[] @relation("CommentThreads")
+
+  @@index([documentId])
+  @@index([userId])
+  @@index([parentId])
+}
+
+model DocumentVersion {
+  id         String   @id @default(uuid())
+  documentId String
+  version    Int
+  content    String
+  createdBy  String
+  createdAt  DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  creator    User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([createdBy])
+}
+
+model DocumentLink {
+  id               String   @id @default(uuid())
+  sourceDocumentId String
+  targetDocumentId String
+  linkType         String   // REFERENCES, RELATED_TO, CHILD_OF, MEETING_NOTE, TASK_SPEC, RUNBOOK, ARCHITECTURE
+  createdAt        DateTime @default(now())
+
+  @@index([sourceDocumentId])
+  @@index([targetDocumentId])
+}
+
+model DocumentFavorite {
+  id         String   @id @default(uuid())
+  documentId String
+  userId     String
+  createdAt  DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([userId])
+}
+
+model DocumentTemplate {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  category    String
+  content     String
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model DocumentAttachment {
+  id          String    @id @default(uuid())
+  documentId  String
+  fileAssetId String
+  createdAt   DateTime  @default(now())
+
+  document    Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, fileAssetId])
+  @@index([documentId])
+}
+
+model DocumentSummary {
+  id         String   @id @default(uuid())
+  documentId String   @unique
+  summary    String
+  createdAt  DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model DocumentEmbedding {
+  id                      String   @id @default(uuid())
+  documentId              String   @unique
+  embeddingVector         Unsupported("vector(1536)")?
+  embeddingVectorFallback Json?
+  embeddingModel          String
+  createdAt               DateTime @default(now())
+
+  document                Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model AIConversation {
+  id          String      @id @default(uuid())
+  workspaceId String
+  userId      String
+  title       String
+  createdAt   DateTime    @default(now())
+
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    AIMessage[]
+
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+model AIMessage {
+  id             String         @id @default(uuid())
+  conversationId String
+  role           String         // USER, ASSISTANT, SYSTEM
+  content        String
+  citations      Json?
+  createdAt      DateTime       @default(now())
+
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+model AIWorkspaceMemory {
+  id          String    @id @default(uuid())
+  workspaceId String    @unique
+  summary     String
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AIAgent {
+  id           String    @id @default(uuid())
+  workspaceId  String
+  name         String
+  purpose      String
+  systemPrompt String
+  createdAt    DateTime  @default(now())
+
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model AIAutomation {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  trigger     String
+  action      String
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model AIUsageLog {
+  id               String    @id @default(uuid())
+  provider         String
+  model            String
+  promptTokens     Int
+  completionTokens Int
+  latency          Float
+  cost             Float
+  workspaceId      String?
+  userId           String?
+  createdAt        DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+model AIBudget {
+  id               String    @id @default(uuid())
+  workspaceId      String    @unique
+  monthlyLimit     Float
+  warningThreshold Float
+  createdAt        DateTime  @default(now())
+
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model AITool {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  description String
+  toolType    String
+  config      Json
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model AgentWorkflow {
+  id          String    @id @default(uuid())
+  workspaceId String
+  name        String
+  description String
+  steps       Json
+  createdAt   DateTime  @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model AIPendingAction {
+  id         String   @id @default(uuid())
+  agentId    String
+  actionType String
+  payload    Json
+  status     String   // PENDING, APPROVED, REJECTED, EXECUTED
+  createdAt  DateTime @default(now())
+}
+
+model AIExecution {
+  id          String    @id @default(uuid())
+  agentId     String
+  workflowId  String
+  status      String
+  startedAt   DateTime
+  completedAt DateTime?
+  result      Json?
+  error       String?
+}
+
+model AIKnowledgeNode {
+  id         String   @id @default(uuid())
+  entityType String
+  entityId   String
+  label      String
+  metadata   Json
+  createdAt  DateTime @default(now())
+}
+
+model AIKnowledgeEdge {
+  id             String   @id @default(uuid())
+  sourceNodeId   String
+  targetNodeId   String
+  relationship   String
+  metadata       Json
+  createdAt  DateTime @default(now())
+}
+
+model AIPromptTemplate {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  name         String
+  category     String
+  systemPrompt String
+  userPrompt   String
+  version      Int
+  isActive     Boolean
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model AIEvaluation {
+  id               String   @id @default(uuid())
+  executionId      String
+  rating           Int
+  feedback         String?
+  accuracyScore    Float
+  citationScore    Float
+  helpfulnessScore Float
+  latencyScore     Float
+  createdAt        DateTime @default(now())
+}
+
+model AIArtifact {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  type             String
+  title            String
+  content          String
+  createdByAI      Boolean  @default(true)
+  sourceExecutionId String?
+  createdAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model AIArtifactApproval {
+  id         String    @id @default(uuid())
+  artifactId String
+  approverId String
+  status     String    // PENDING, APPROVED, REJECTED
+  approvedAt DateTime?
+}
+
+model AIFeedback {
+  id        String   @id @default(uuid())
+  messageId String
+  rating    Int
+  feedback  String?
+  createdAt DateTime @default(now())
+}
+
+model AIModelPolicy {
+  id          String   @id @default(uuid())
+  workspaceId String
+  taskType    String
+  provider    String
+  model       String
+  maxCost     Float?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DeviceSession {
+  id          String   @id @default(uuid())
+  userId      String
+  deviceId    String
+  platform    String
+  appVersion  String
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([deviceId])
+}
+
+model SyncJournal {
+  id          String    @id @default(uuid())
+  deviceId    String
+  batchId     String    @unique
+  status      String    // PENDING, PROCESSING, COMPLETED, FAILED
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  error       String?
+
+  @@index([deviceId])
+}
+
+enum IntegrationPermission {
+  READ_ONLY
+  READ_WRITE
+  ADMIN
+}
+
+enum IntegrationSyncStatus {
+  SYNC_PENDING
+  SYNCING
+  SYNCED
+  FAILED
+  PAUSED
+}
+
+model Integration {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  provider     String   // e.g. GITHUB, GITLAB, GOOGLE, MICROSOFT, SLACK, TEAMS
+  name         String
+  description  String?
+  status       String   // ACTIVE, INACTIVE
+  version      String   @default("1.0.0")
+  installedAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  workspace    Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  installations IntegrationInstallation[]
+
+  @@index([workspaceId])
+  @@index([provider])
+}
+
+model IntegrationInstallation {
+  id            String                @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  installedBy   String
+  settings      Json
+  status        String                // ACTIVE, SUSPENDED
+  permission    IntegrationPermission @default(READ_ONLY)
+  syncStatus    IntegrationSyncStatus @default(SYNC_PENDING)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  workspace     Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  integration   Integration           @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  installer     User                  @relation(fields: [installedBy], references: [id])
+
+  @@index([workspaceId])
+  @@index([integrationId])
+  @@index([installedBy])
+}
+
+model IntegrationCredential {
+  id                   String    @id @default(uuid())
+  workspaceId          String
+  provider             String
+  encryptedAccessToken String
+  encryptedRefreshToken String?
+  expiresAt            DateTime?
+  createdAt            DateTime  @default(now())
+
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([provider])
+}
+
+model Webhook {
+  id          String            @id @default(uuid())
+  workspaceId String
+  provider    String
+  url         String
+  secret      String
+  status      String            // ACTIVE, INACTIVE
+  createdAt   DateTime          @default(now())
+  deliveries  WebhookDelivery[]
+
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([provider])
+}
+
+model WebhookDelivery {
+  id             String   @id @default(uuid())
+  webhookId      String
+  event          String
+  payload        Json
+  responseStatus Int?
+  attempts       Int      @default(1)
+  createdAt      DateTime @default(now())
+
+  webhook        Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+}
+
+model IntegrationEvent {
+  id          String   @id @default(uuid())
+  workspaceId String
+  provider    String
+  eventType   String
+  payload     Json
+  processed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([provider])
+  @@index([eventType])
+}
+
+enum SubscriptionPlan {
+  FREE
+  STARTUP
+  BUSINESS
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+  PAUSED
+}
+
+enum SeatStatus {
+  ASSIGNED
+  INVITED
+  SUSPENDED
+}
+
+enum ContractStatus {
+  DRAFT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+model WorkspaceSeat {
+  id          String     @id @default(uuid())
+  workspaceId String
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status      SeatStatus @default(ASSIGNED)
+  createdAt   DateTime   @default(now())
+
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+model UsageSnapshot {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  usersCount     Int       @default(0)
+  projectsCount  Int       @default(0)
+  storageBytes   BigInt    @default(0)
+  aiTokens       Int       @default(0)
+  meetingMinutes Int       @default(0)
+  recordedAt     DateTime  @default(now())
+
+  @@index([workspaceId])
+}
+
+model PlanFeature {
+  id         String           @id @default(uuid())
+  plan       SubscriptionPlan
+  featureKey String
+  enabled    Boolean          @default(true)
+
+  @@unique([plan, featureKey])
+}
+
+model SubscriptionInvoice {
+  id               String    @id @default(uuid())
+  workspaceId      String
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stripeInvoiceId  String    @unique
+  amountPaid       Int
+  currency         String
+  status           String
+  hostedInvoiceUrl String?
+  createdAt        DateTime  @default(now())
+
+  @@index([workspaceId])
+}
+
+model SubscriptionAudit {
+  id           String           @id @default(uuid())
+  workspaceId  String
+  userId       String
+  action       String
+  previousPlan SubscriptionPlan
+  newPlan      SubscriptionPlan
+  timestamp    DateTime         @default(now())
+
+  @@index([workspaceId])
+}
+
+model BillingEvent {
+  id             String   @id @default(uuid())
+  stripeEventId  String   @unique
+  type           String
+  status         String
+  processedAt    DateTime @default(now())
+}
+
+model EnterpriseContract {
+  id             String         @id @default(uuid())
+  workspaceId    String
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contractNumber String         @unique
+  startDate      DateTime
+  endDate        DateTime
+  annualValue    Int
+  billingTerms   String
+  status         ContractStatus @default(DRAFT)
+  createdAt      DateTime       @default(now())
+
+  @@index([workspaceId])
+}
+
+model Organization {
+  id          String @id @default(uuid())
+  name        String
+  domain      String?
+  workspaces  Workspace[]
+  departments Department[]
+}
+
+model Department {
+  id             String @id @default(uuid())
+  organizationId String
+
+  name           String
+  managerId      String?
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+model SSOProvider {
+  id              String @id @default(uuid())
+  workspaceId     String
+
+  providerType    String
+  metadataUrl     String?
+
+  clientId        String?
+  issuer          String?
+
+  enabled         Boolean @default(true)
+
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model SCIMProvisioning {
+  id            String @id @default(uuid())
+  workspaceId   String
+
+  provider      String
+  accessToken   String
+
+  enabled       Boolean
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model SecurityPolicy {
+  id                 String @id @default(uuid())
+
+  workspaceId        String @unique
+
+  requireMFA         Boolean
+  sessionTimeout     Int
+
+  allowPasswordLogin Boolean
+
+  ipAllowlist        Json?
+
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model UserSession {
+  id            String @id @default(uuid())
+
+  userId        String
+
+  deviceInfo    Json
+  ipAddress     String
+  riskScore     Int @default(0)
+
+  createdAt     DateTime
+  expiresAt     DateTime
+
+  user          User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AuditExport {
+  id            String @id @default(uuid())
+
+  workspaceId   String
+
+  format        String
+  status        String
+
+  createdAt     DateTime
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model RetentionPolicy {
+  id             String @id @default(uuid())
+
+  workspaceId    String
+
+  targetType     String
+  retentionDays  Int
+
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model LegalHold {
+  id            String @id @default(uuid())
+
+  workspaceId   String
+
+  name          String
+  active        Boolean
+
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model DLPPolicy {
+  id             String @id @default(uuid())
+
+  workspaceId    String
+
+  name           String
+  pattern        String
+  action         String
+
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model SecurityIncident {
+  id           String @id @default(uuid())
+  workspaceId  String
+
+  severity     String
+  category     String
+
+  description  String
+
+  createdAt    DateTime @default(now())
+
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
+model MFARecoveryCode {
+  id         String @id @default(uuid())
+  userId     String
+
+  codeHash   String
+
+  used       Boolean @default(false)
+
+  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Portfolio {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+
+  workspaces  Workspace[]
+
+  programs    Program[]
+
+  createdAt   DateTime @default(now())
+}
+
+model Program {
+  id          String   @id @default(uuid())
+
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  name        String
+
+  description String?
+
+  startDate   DateTime?
+  endDate     DateTime?
+
+  createdAt   DateTime @default(now())
+}
+
+model Objective {
+  id           String    @id @default(uuid())
+
+  workspaceId  String
+  workspace    Workspace @relation(fields:[workspaceId], references:[id], onDelete: Cascade)
+
+  title        String
+  description  String?
+
+  progress     Float     @default(0)
+
+  keyResults   KeyResult[]
+
+  createdAt    DateTime @default(now())
+}
+
+model KeyResult {
+  id            String @id @default(uuid())
+
+  objectiveId   String
+  objective      Objective @relation(fields:[objectiveId], references:[id], onDelete: Cascade)
+
+  title         String
+
+  targetValue   Float
+  currentValue  Float
+
+  createdAt     DateTime @default(now())
+}
+
+model KPI {
+  id            String @id @default(uuid())
+
+  workspaceId   String
+  workspace     Workspace @relation(fields:[workspaceId], references:[id], onDelete: Cascade)
+
+  name          String
+
+  metricType    String
+
+  targetValue   Float?
+
+  createdAt     DateTime @default(now())
+}
+
+model Dashboard {
+  id            String @id @default(uuid())
+
+  workspaceId   String
+  workspace     Workspace @relation(fields:[workspaceId], references:[id], onDelete: Cascade)
+
+  name          String
+
+  widgets       Json
+
+  createdAt     DateTime @default(now())
+}
+
+model Forecast {
+  id            String @id @default(uuid())
+
+  workspaceId   String
+  workspace     Workspace @relation(fields:[workspaceId], references:[id], onDelete: Cascade)
+
+  forecastType  String
+
+  result        Json
+
+  createdAt     DateTime @default(now())
+}
+
+model WarehouseSnapshot {
+  id               String @id @default(uuid())
+
+  workspaceId      String
+
+  projectsCount    Int
+  tasksCount       Int
+  completedTasks   Int
+
+  meetingsCount    Int
+  meetingMinutes   Int
+
+  aiTokens         Int
+
+  storageBytes     BigInt
+
+  createdAt        DateTime @default(now())
+}
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum WorkflowExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum WorkflowNodeType {
+  TRIGGER
+  CONDITION
+  ACTION
+  APPROVAL
+  TIMER
+  AI_ACTION
+  NOTIFICATION
+  WEBHOOK
+}
+
+enum FormFieldType {
+  TEXT
+  NUMBER
+  DATE
+  EMAIL
+  PHONE
+  SELECT
+  MULTI_SELECT
+  CHECKBOX
+  FILE
+}
+
+model Workflow {
+  id          String @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  status      WorkflowStatus @default(DRAFT)
+  definition  Json
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  executions  WorkflowExecution[]
+}
+
+model WorkflowExecution {
+  id           String @id @default(uuid())
+  workflowId   String
+  status       WorkflowExecutionStatus
+  triggerEvent String
+  inputData    Json
+  outputData   Json?
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+
+  workflow Workflow @relation(fields:[workflowId], references:[id], onDelete: Cascade)
+  logs WorkflowExecutionLog[]
+}
+
+model WorkflowExecutionLog {
+  id          String @id @default(uuid())
+  executionId String
+  nodeId      String
+  status      String
+  message     String?
+  createdAt   DateTime @default(now())
+
+  execution WorkflowExecution @relation(fields:[executionId], references:[id], onDelete: Cascade)
+}
+
+model ApprovalRequest {
+  id           String @id @default(uuid())
+  workflowId   String
+  requestedBy  String
+  approverId   String
+  status       String
+  comments     String?
+  createdAt    DateTime @default(now())
+}
+
+model DynamicForm {
+  id          String @id @default(uuid())
+  workspaceId String
+  name        String
+  schema      Json
+  createdBy   String
+  createdAt   DateTime @default(now())
+}
+
+model FormSubmission {
+  id          String @id @default(uuid())
+  formId      String
+  submittedBy String
+  payload     Json
+  createdAt   DateTime @default(now())
+}
+
+model BusinessRule {
+  id          String @id @default(uuid())
+  workspaceId String
+  name        String
+  condition   Json
+  action      Json
+  createdAt   DateTime @default(now())
+}
+
+model SLAConfiguration {
+  id          String @id @default(uuid())
+  workspaceId String
+  name        String
+  targetHours Int
+  escalation  Json
+}
+
+model WorkflowTemplate {
+  id          String @id @default(uuid())
+  name        String
+  category    String
+  definition  Json
+  createdAt   DateTime @default(now())
+}
+
+model Employee {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId      String?
+  fullName    String
+  email       String
+  role        String
+  department  String
+  status      String   @default("ACTIVE")
+  salary      Float    @default(0.0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Attendance {
+  id         String    @id @default(uuid())
+  employeeId String
+  checkIn    DateTime  @default(now())
+  checkOut   DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model LeaveRequest {
+  id         String    @id @default(uuid())
+  employeeId String
+  startDate  DateTime
+  endDate    DateTime
+  status     String    @default("PENDING")
+  reason     String?
+  createdAt  DateTime  @default(now())
+}
+
+model Shift {
+  id         String   @id @default(uuid())
+  employeeId String
+  startTime  DateTime
+  endTime    DateTime
+  role       String
+  createdAt  DateTime @default(now())
+}
+
+model PayrollRun {
+  id          String   @id @default(uuid())
+  workspaceId String
+  periodStart DateTime
+  periodEnd   DateTime
+  status      String   @default("PENDING")
+  totalAmount Float    @default(0.0)
+  createdAt   DateTime @default(now())
+}
+
+model RecruitmentCandidate {
+  id          String   @id @default(uuid())
+  workspaceId String
+  fullName    String
+  email       String
+  status      String   @default("APPLIED")
+  resumeText  String?
+  aiScore     Int      @default(0)
+  createdAt   DateTime @default(now())
+}
+
+model CRMLead {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  company     String
+  email       String
+  status      String   @default("NEW")
+  value       Float    @default(0.0)
+  aiScore     Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CRMOpportunity {
+  id          String   @id @default(uuid())
+  workspaceId String
+  leadId      String?
+  name        String
+  stage       String   @default("PROSPECTING")
+  value       Float    @default(0.0)
+  probability Float    @default(0.0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CRMAccount {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  industry    String?
+  website     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CRMContact {
+  id          String   @id @default(uuid())
+  workspaceId String
+  accountId   String?
+  fullName    String
+  email       String
+  phone       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ERPVendor {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  email       String
+  phone       String?
+  status      String   @default("ACTIVE")
+  riskRating  String   @default("LOW")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PurchaseRequest {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  item          String
+  quantity      Int
+  estimatedCost Float    @default(0.0)
+  status        String   @default("PENDING")
+  requestedBy   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model PurchaseOrder {
+  id          String   @id @default(uuid())
+  workspaceId String
+  requestId   String?
+  vendorId    String
+  totalAmount Float    @default(0.0)
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model RFQ {
+  id          String   @id @default(uuid())
+  workspaceId String
+  title       String
+  description String?
+  status      String   @default("OPEN")
+  dueDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Warehouse {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  location    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model InventoryItem {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  sku         String
+  quantity    Int      @default(0)
+  warehouseId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model StockTransfer {
+  id              String   @id @default(uuid())
+  workspaceId     String
+  itemId          String
+  fromWarehouseId String
+  toWarehouseId   String
+  quantity        Int
+  status          String   @default("PENDING")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model InventoryAdjustment {
+  id          String   @id @default(uuid())
+  workspaceId String
+  itemId      String
+  warehouseId String
+  qtyChange   Int
+  reason      String?
+  createdAt   DateTime @default(now())
+}
+
+model ERPAsset {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  category    String
+  status      String   @default("ACTIVE")
+  allocatedTo String?
+  value       Float    @default(0.0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model AssetMaintenance {
+  id            String   @id @default(uuid())
+  assetId       String
+  title         String
+  scheduledDate DateTime
+  status        String   @default("SCHEDULED")
+  createdAt     DateTime @default(now())
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  workspaceId String
+  amount      Float
+  category    String
+  status      String   @default("PENDING")
+  employeeId  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Invoice {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  amount       Float
+  status       String   @default("UNPAID")
+  customerName String
+  dueDate      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Budget {
+  id          String   @id @default(uuid())
+  workspaceId String
+  category    String
+  amount      Float
+  spent       Float    @default(0.0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model HelpdeskTicket {
+  id          String   @id @default(uuid())
+  workspaceId String
+  title       String
+  description String
+  status      String   @default("OPEN")
+  priority    String   @default("MEDIUM")
+  assignedTo  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TicketComment {
+  id        String   @id @default(uuid())
+  ticketId  String
+  authorId  String
+  comment   String
+  createdAt DateTime @default(now())
+}
+
+model TicketSLA {
+  id          String   @id @default(uuid())
+  ticketId    String
+  targetHours Int
+  breached    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+
+
+

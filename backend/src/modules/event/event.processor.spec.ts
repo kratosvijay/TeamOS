@@ -7,6 +7,9 @@ describe('ProjectProvisioningWorker', () => {
   let prisma: PrismaService;
 
   const mockPrismaService = {
+    project: {
+      findUnique: jest.fn().mockResolvedValue({ workspaceId: 'work-123' }),
+    },
     channel: {
       create: jest.fn(),
     },
