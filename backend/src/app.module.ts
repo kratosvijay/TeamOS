@@ -65,6 +65,53 @@ import { AssetsModule } from './modules/assets/assets.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { HelpdeskModule } from './modules/helpdesk/helpdesk.module';
 
+// Phase 20 developer ecosystem modules
+import { DeveloperModule } from './modules/developer/developer.module';
+import { SdkModule } from './modules/sdk/sdk.module';
+import { TeamOSGraphQLModule } from './modules/graphql/graphql.module';
+import { ApiGatewayModule } from './modules/api-gateway/api-gateway.module';
+import { ExtensionRuntimeModule } from './modules/extension-runtime/extension-runtime.module';
+import { EventBusModule } from './modules/event-bus/event-bus.module';
+import { CliModule } from './modules/cli/cli.module';
+
+// Phase 21 DevOps / Observability modules
+import { ObservabilityModule } from './modules/observability/observability.module';
+import { LoggingModule } from './modules/logging/logging.module';
+import { HealthModule } from './modules/health/health.module';
+import { BackupModule } from './modules/backup/backup.module';
+import { ClusterModule } from './modules/cluster/cluster.module';
+
+// Phase 23 - Enterprise Digital Twin & Decision Intelligence Modules
+import { DigitalTwinModule } from './modules/digital-twin/digital-twin.module';
+import { EnterpriseEventBusModule } from './modules/enterprise-event-bus/enterprise-event-bus.module';
+import { ProcessMiningModule } from './modules/process-mining/process-mining.module';
+import { RootCauseAnalysisModule } from './modules/root-cause-analysis/root-cause-analysis.module';
+import { SimulationModule } from './modules/simulation/simulation.module';
+import { OptimizationModule } from './modules/optimization/optimization.module';
+import { PredictionEngineModule } from './modules/prediction-engine/prediction-engine.module';
+import { DecisionIntelligenceModule } from './modules/decision-intelligence/decision-intelligence.module';
+import { StrategyModule } from './modules/strategy/strategy.module';
+import { ExecutiveIntelligenceModule } from './modules/executive-intelligence/executive-intelligence.module';
+import { EnterpriseDecisionEngineModule } from './modules/enterprise-decision-engine/enterprise-decision-engine.module';
+
+// Phase 24 Enterprise Data Platform modules
+import { IntegrationFabricModule } from './modules/integration-fabric/integration-fabric.module';
+import { MasterDataModule } from './modules/master-data/master-data.module';
+import { DataGovernanceModule } from './modules/data-governance/data-governance.module';
+import { EtlEngineModule } from './modules/etl-engine/etl-engine.module';
+import { StreamingPlatformModule } from './modules/streaming-platform/streaming-platform.module';
+import { CanonicalMappingModule } from './modules/canonical-mapping/canonical-mapping.module';
+import { StudioModule } from './modules/studio/studio.module';
+import { RuntimeModule } from './modules/runtime/runtime.module';
+import { IntegrationFlowModule } from './modules/integration-flow/integration-flow.module';
+import { ApiManagementModule } from './modules/api-management/api-management.module';
+import { EventStreamingModule } from './modules/event-streaming/event-streaming.module';
+import { DataPipelineModule } from './modules/data-pipeline/data-pipeline.module';
+import { IdpModule } from './modules/idp/idp.module';
+import { RpaModule } from './modules/rpa/rpa.module';
+import { B2bModule } from './modules/b2b/b2b.module';
+import { SyncEngineModule } from './modules/sync-engine/sync-engine.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -135,7 +182,47 @@ import { HelpdeskModule } from './modules/helpdesk/helpdesk.module';
     AssetsModule,
     FinanceModule,
     HelpdeskModule,
+    DeveloperModule,
+    SdkModule,
+    TeamOSGraphQLModule,
+    ApiGatewayModule,
+    ExtensionRuntimeModule,
+    EventBusModule,
+    CliModule,
+    ObservabilityModule,
+    LoggingModule,
+    HealthModule,
+    BackupModule,
+    ClusterModule,
+    DigitalTwinModule,
+    EnterpriseEventBusModule,
+    ProcessMiningModule,
+    RootCauseAnalysisModule,
+    SimulationModule,
+    OptimizationModule,
+    PredictionEngineModule,
+    DecisionIntelligenceModule,
+    StrategyModule,
+    ExecutiveIntelligenceModule,
+    EnterpriseDecisionEngineModule,
+    IntegrationFabricModule,
+    MasterDataModule,
+    DataGovernanceModule,
+    EtlEngineModule,
+    StreamingPlatformModule,
+    CanonicalMappingModule,
+    StudioModule,
+    RuntimeModule,
+    IntegrationFlowModule,
+    ApiManagementModule,
+    EventStreamingModule,
+    DataPipelineModule,
+    IdpModule,
+    RpaModule,
+    B2bModule,
+    SyncEngineModule,
   ],
 })
 export class AppModule {}
+
 

@@ -271,6 +271,13 @@ model Workspace {
   aiBudget            AIBudget?
   aiWorkspaceMemory   AIWorkspaceMemory?
   documentTemplates   DocumentTemplate[]
+  knowledgeNodes       KnowledgeNode[]
+  knowledgeEdges       KnowledgeEdge[]
+  embeddings           Embedding[]
+  agentMemories        AgentMemory[]
+  agentSchedules       AgentSchedule[]
+  agentSkills          AgentSkill[]
+  aiKnowledgeSources   AIKnowledgeSource[]
   integrations         Integration[]
   installations        IntegrationInstallation[]
   credentials          IntegrationCredential[]
@@ -1228,6 +1235,7 @@ model KnowledgeCollection {
 
   workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   documents   Document[]
+  nodes       KnowledgeCollectionNode[]
 
   @@index([workspaceId])
 }
@@ -2527,6 +2535,3772 @@ model TicketSLA {
   breached    Boolean  @default(false)
   createdAt   DateTime @default(now())
 }
+
+model DeveloperApp {
+  id           String   @id @default(uuid())
+  name         String
+  slug         String   @unique
+  description  String
+  version      String
+  author       String
+  category     String
+  icon         String?
+  bannerImage  String?
+  status       String   @default("DRAFT") // DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, DEPRECATED
+  downloads    Int      @default(0)
+  rating       Float    @default(0.0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model InstalledExtension {
+  id          String   @id @default(uuid())
+  workspaceId String
+  extensionId String
+  version     String
+  enabled     Boolean  @default(true)
+  installedBy String
+  installedAt DateTime @default(now())
+}
+
+model APIKey {
+  id          String    @id @default(uuid())
+  workspaceId String
+  keyHash     String    @unique
+  scopes      String[]
+  lastUsed    DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model OAuthApplication {
+  clientId     String   @id @default(uuid())
+  clientSecret String
+  name         String
+  redirectUris String[]
+  scopes       String[]
+  workspaceId  String
+  createdAt    DateTime @default(now())
+}
+
+model WebhookSubscription {
+  id          String   @id @default(uuid())
+  workspaceId String
+  url         String
+  events      String[]
+  secret      String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model EventSubscription {
+  id          String   @id @default(uuid())
+  workspaceId String
+  eventName   String
+  targetUrl   String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model ExtensionPermission {
+  id          String   @id @default(uuid())
+  extensionId String
+  permission  String   // READ_PROJECTS, WRITE_PROJECTS, READ_TASKS, etc.
+  createdAt   DateTime @default(now())
+}
+
+model ExtensionSetting {
+  id           String   @id @default(uuid())
+  extensionId  String
+  workspaceId  String
+  settingsJson String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model WidgetDefinition {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  type        String
+  config      Json
+  createdAt   DateTime @default(now())
+}
+
+model MarketplaceReview {
+  id          String   @id @default(uuid())
+  appId       String
+  reviewer    String
+  rating      Int
+  reviewText  String
+  status      String   @default("APPROVED")
+  notes       String?
+  reviewedAt  DateTime @default(now())
+}
+
+model ExtensionAnalytics {
+  id                   String   @id @default(uuid())
+  extensionId          String
+  installs             Int      @default(0)
+  activeUsers          Int      @default(0)
+  crashes              Int      @default(0)
+  averageExecutionTime Float    @default(0.0)
+  errors               Int      @default(0)
+  updatedAt            DateTime @updatedAt
+}
+
+enum AgentState {
+  DRAFT
+  CONFIGURED
+  READY
+  RUNNING
+  WAITING_APPROVAL
+  PAUSED
+  COMPLETED
+  FAILED
+  RETRYING
+  ARCHIVED
+}
+
+enum AgentCapability {
+  PLANNING
+  SUMMARIZATION
+  OCR
+  FORECASTING
+  TRANSLATION
+  CODE_REVIEW
+  DEPLOYMENT
+  THREAT_DETECTION
+  SCHEDULING
+}
+
+enum AgentMessageType {
+  TASK_ASSIGNMENT
+  CONTEXT_TRANSFER
+  PROGRESS_UPDATE
+  APPROVAL_REQUEST
+  FAILURE_NOTICE
+  ARTIFACT_PRODUCED
+}
+
+model AgentMessage {
+  id                 String           @id @default(uuid())
+  senderId           String
+  receiverId         String
+  parentExecutionId  String?
+  messageType        AgentMessageType
+  payloadContext     Json
+  createdAt          DateTime         @default(now())
+}
+
+enum KnowledgeEntityType {
+  TASK
+  DOCUMENT
+  PROJECT
+  MEETING
+  EMPLOYEE
+  ERP_LEDGER
+  CUSTOMER
+  WORKFLOW
+  INCIDENT
+}
+
+enum KnowledgeRelationType {
+  OWNS
+  USES
+  CREATED
+  ASSIGNED
+  REFERENCES
+  DEPENDS_ON
+  PART_OF
+  GENERATED
+  LINKED_TO
+}
+
+model KnowledgeNode {
+  id           String              @id @default(uuid())
+  workspaceId  String
+  entityType   KnowledgeEntityType
+  entityId     String              @unique
+  label        String
+  metadata     Json
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  incomingEdges KnowledgeEdge[]     @relation("TargetNode")
+  outgoingEdges KnowledgeEdge[]     @relation("SourceNode")
+  collections   KnowledgeCollectionNode[]
+
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([entityType])
+}
+
+model KnowledgeEdge {
+  id             String                @id @default(uuid())
+  workspaceId    String
+  sourceNodeId   String
+  targetNodeId   String
+  relationType   KnowledgeRelationType
+  metadata       Json
+  createdAt      DateTime              @default(now())
+
+  sourceNode     KnowledgeNode         @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode     KnowledgeNode         @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  workspace      Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+}
+
+
+
+model KnowledgeCollectionNode {
+  id           String              @id @default(uuid())
+  collectionId String
+  nodeId       String
+
+  collection   KnowledgeCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  node         KnowledgeNode       @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, nodeId])
+}
+
+model Embedding {
+  id                      String   @id @default(uuid())
+  workspaceId             String
+  entityType              String
+  entityId                String
+  embeddingVector         Unsupported("vector(1536)")?
+  embeddingVectorFallback Json?
+  embeddingModel          String
+  createdAt               DateTime @default(now())
+
+  workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([entityType, entityId])
+}
+
+model AgentMemory {
+  id          String   @id @default(uuid())
+  workspaceId String
+  agentId     String?
+  userId      String?
+  type        String
+  department  String?
+  content     String
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([type])
+}
+
+model AgentExecution {
+  id          String    @id @default(uuid())
+  agentId     String
+  status      AgentState
+  plan        Json
+  steps       Json
+  cost        Float     @default(0.0)
+  tokens      Int       @default(0)
+  error       String?
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  feedbacks   AgentFeedback[]
+}
+
+model AgentSchedule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  agentId     String
+  cron        String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model AgentSkill {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  versions    SkillVersion[]
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model SkillVersion {
+  id          String   @id @default(uuid())
+  skillId     String
+  version     String
+  codeContent String
+  createdAt   DateTime @default(now())
+
+  skill       AgentSkill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+}
+
+model SkillExecution {
+  id             String   @id @default(uuid())
+  executionId    String
+  skillVersionId String
+  parameters     Json
+  output         Json?
+  error          String?
+  latency        Float
+  createdAt      DateTime @default(now())
+}
+
+model AIKnowledgeSource {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  sourceType  String
+  config      Json
+  createdAt   DateTime @default(now())
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+}
+
+model AIReasoningLog {
+  id          String   @id @default(uuid())
+  executionId String
+  stepIndex   Int
+  thought     String
+  observation String
+  action      String
+  createdAt   DateTime @default(now())
+}
+
+model AgentFeedback {
+  id          String   @id @default(uuid())
+  executionId String
+  userId      String
+  score       Float
+  correction  String?
+  approved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  execution   AgentExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+}
+
+model DigitalTwin {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  status      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model DigitalTwinSnapshot {
+  id          String   @id @default(uuid())
+  twinId      String
+  workspaceId String
+  metricsJson String
+  stateJson   String
+  recordedAt  DateTime @default(now())
+
+  @@index([twinId])
+  @@index([workspaceId])
+}
+
+model ProcessModel {
+  id          String             @id @default(uuid())
+  workspaceId String
+  name        String
+  key         String
+  description String?
+  version     Int
+  bpmnXml     String?
+  isActive    Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  executions  ProcessExecution[]
+
+  @@index([workspaceId])
+}
+
+model ProcessExecution {
+  id             String       @id @default(uuid())
+  processModelId String
+  workspaceId    String
+  status         String       // RUNNING, COMPLETED, FAILED, SLA_BREACHED
+  startedAt      DateTime     @default(now())
+  endedAt        DateTime?
+  duration       Float?
+  payload        String?
+  processModel   ProcessModel @relation(fields: [processModelId], references: [id], onDelete: Cascade)
+
+  @@index([processModelId])
+  @@index([workspaceId])
+}
+
+model ProcessVariant {
+  id             String   @id @default(uuid())
+  processModelId String
+  hash           String
+  name           String
+  activities     String   // JSON array of strings
+  occurrenceCount Int
+  avgDuration    Float
+
+  @@index([processModelId])
+}
+
+model DecisionScenario {
+  id               String            @id @default(uuid())
+  workspaceId      String
+  name             String
+  description      String?
+  parentScenarioId String?
+  status           String            // DRAFT, SIMULATED, APPROVED, ARCHIVED
+  createdAt        DateTime          @default(now())
+  versions         ScenarioVersion[]
+
+  @@index([workspaceId])
+}
+
+model DecisionRecommendation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  scenarioId  String?
+  title       String
+  actionType  String
+  description String
+  confidence  Float
+  evidence    String?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model Simulation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  configJson  String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model SimulationRun {
+  id           String   @id @default(uuid())
+  simulationId String
+  workspaceId  String
+  status       String   // PENDING, RUNNING, COMPLETED, FAILED
+  duration     Float
+  resultsJson  String
+  startedAt    DateTime
+  endedAt      DateTime
+
+  @@index([simulationId])
+  @@index([workspaceId])
+}
+
+model OptimizationModel {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  name          String
+  objective     String
+  variablesJson String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model OptimizationResult {
+  id               String   @id @default(uuid())
+  modelId          String
+  workspaceId      String
+  solvedValuesJson String
+  objectiveValue   Float
+  status           String
+  solvedAt         DateTime @default(now())
+
+  @@index([modelId])
+  @@index([workspaceId])
+}
+
+model BusinessConstraint {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  equation    String
+  limit       Float
+  type        String   // STRICT, SOFT
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EnterpriseEvent {
+  id          String   @id @default(uuid())
+  workspaceId String
+  source      String   // ERP, CRM, DEVOPS, AI, HRMS, FINANCE
+  name        String
+  payload     String
+  timestamp   DateTime @default(now())
+  userId      String?
+
+  @@index([workspaceId])
+  @@index([name])
+}
+
+model EventCorrelation {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  sourceEventId  String
+  targetEventId  String
+  type           String
+  weight         Float
+
+  @@index([workspaceId])
+  @@index([sourceEventId])
+  @@index([targetEventId])
+}
+
+model EnterpriseMetric {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  value       Float
+  unit        String
+  timestamp   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([name])
+}
+
+model StrategicInitiative {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  name         String
+  description  String?
+  targetValue  Float
+  currentValue Float
+  dueDate      DateTime
+
+  @@index([workspaceId])
+}
+
+model EnterpriseEventSchema {
+  id          String   @id @default(uuid())
+  workspaceId String
+  eventName   String
+  version     Int
+  schemaJson  String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([eventName])
+}
+
+model EnterpriseEventConsumer {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  endpoint    String
+  version     Int
+  status      String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EventRetentionPolicy {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  eventName     String
+  retentionDays Int
+  action        String   // ARCHIVE, PURGE
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EventLineage {
+  id          String   @id @default(uuid())
+  workspaceId String
+  eventId     String
+  parentId    String?
+  rootId      String?
+  depth       Int
+
+  @@index([workspaceId])
+  @@index([eventId])
+}
+
+model ScenarioVersion {
+  id            String           @id @default(uuid())
+  scenarioId    String
+  versionNumber Int
+  configJson    String
+  notes         String?
+  createdAt     DateTime         @default(now())
+  scenario      DecisionScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  @@index([scenarioId])
+}
+
+model RecommendationApproval {
+  id               String   @id @default(uuid())
+  recommendationId String
+  status           String   // DRAFT, REVIEW, APPROVED, IMPLEMENTED, REJECTED
+  approverId       String?
+  comment          String?
+  updatedAt        DateTime @updatedAt
+
+  @@index([recommendationId])
+}
+
+model SimulationTemplate {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  configJson  String
+  category    String   // HR, FINANCE, SRE, PROCUREMENT, SALES
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model OptimizationSolver {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  type        String   // LP, MIP, GENETIC, HEURISTIC, AI
+  isActive    Boolean  @default(true)
+  configJson  String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ProcessBenchmark {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  processName        String
+  metricName         String
+  averageValue       Float
+  bestPracticeValue  Float
+  industryAverage    Float
+  createdAt          DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model RecommendationExplanation {
+  id                 String   @id @default(uuid())
+  recommendationId   String
+  whyText            String
+  evidenceJson       String
+  confidenceInterval String
+  constraintsApplied String   // JSON array of strings
+  createdAt          DateTime @default(now())
+
+  @@index([recommendationId])
+}
+
+model EnterpriseScorecard {
+  id              String   @id @default(uuid())
+  workspaceId     String
+  period          String   // Q1_2026, etc.
+  financialScore  Float
+  customerScore   Float
+  processScore    Float
+  learningScore   Float
+  technologyScore Float
+  aiScore         Float
+  createdAt       DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EnterpriseTimeline {
+  id          String   @id @default(uuid())
+  workspaceId String
+  timestamp   DateTime @default(now())
+  name        String
+  description String?
+
+  @@index([workspaceId])
+}
+
+model ReplaySession {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  status           String   // PLAYING, PAUSED, COMPLETED
+  currentTimestamp DateTime
+  startTimestamp   DateTime
+  endTimestamp     DateTime
+  createdAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PredictionModel {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  name         String
+  targetMetric String
+  algorithm    String
+  configJson   String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PredictionResult {
+  id             String   @id @default(uuid())
+  modelId        String
+  workspaceId    String
+  predictedValue Float
+  lowerBound     Float
+  upperBound     Float
+  confidence     Float
+  targetDate     DateTime
+  createdAt      DateTime @default(now())
+
+  @@index([modelId])
+  @@index([workspaceId])
+}
+
+model DecisionHistory {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  recommendationId String
+  approvedBy       String
+  approvedAt       DateTime @default(now())
+  expectedOutcome  String
+  actualOutcome    String?
+  roi              Float?
+  lessonsLearned   String?
+
+  @@index([workspaceId])
+  @@index([recommendationId])
+}
+
+model LearningLoopLog {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  predictionId       String
+  actualValue        Float
+  variance           Float
+  weightsUpdatedJson String
+  calibratedAt       DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EnterpriseMaturity {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  aiMaturity         Float
+  devopsMaturity     Float
+  securityMaturity   Float
+  erpMaturity        Float
+  automationMaturity Float
+  analyticsMaturity  Float
+  governanceMaturity Float
+  assessedAt         DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model KPIDependency {
+  id          String   @id @default(uuid())
+  workspaceId String
+  parentKpi   String
+  childKpi    String
+  weight      Float
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model RecommendationCalibration {
+  id                  String   @id @default(uuid())
+  workspaceId         String
+  recommendedConfidence Float
+  actualAccuracy      Float
+  sampleCount         Int
+  updatedAt           DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+// ==========================================
+// PHASE 24 - ENTERPRISE DATA PLATFORM MODELS
+// ==========================================
+
+model FabricIntegration {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  connectorId  String
+  connectionId String
+  scheduleId   String?
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model IntegrationConnector {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  type         String   // SAP, Salesforce, REST, etc.
+  configJson   String   @default("{}")
+
+  @@index([workspaceId])
+}
+
+model IntegrationConnection {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  status       String   @default("DISCONNECTED")
+  host         String?
+  port         Int?
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model FabricCredential {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  connectionId String
+  secretKeyRef String   // pointer to Secret Vault key
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model IntegrationEndpoint {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  connectionId String
+  path         String
+  method       String   @default("GET")
+  configJson   String   @default("{}")
+
+  @@index([workspaceId])
+}
+
+model IntegrationSync {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  syncMode     String   @default("INCREMENTAL") // INCREMENTAL, HISTORICAL
+  lastSyncedAt DateTime?
+
+  @@index([workspaceId])
+}
+
+model IntegrationLog {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  level         String   @default("INFO")
+  message       String
+  timestamp     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model IntegrationSchedule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  cronExpr     String
+  isActive     Boolean  @default(true)
+  nextRunAt    DateTime?
+
+  @@index([workspaceId])
+}
+
+model IntegrationPipeline {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  description  String?
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model IntegrationPipelineStep {
+  id          String   @id @default(uuid())
+  workspaceId String
+  pipelineId  String
+  name         String
+  stepType     String   // EXTRACT, TRANSFORM, LOAD
+  stepOrder    Int
+  configJson   String   @default("{}")
+
+  @@index([workspaceId])
+}
+
+model IntegrationExecution {
+  id          String   @id @default(uuid())
+  workspaceId String
+  pipelineId  String
+  status       String   @default("RUNNING") // RUNNING, COMPLETED, FAILED
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+
+  @@index([workspaceId])
+}
+
+model DataContract {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  status       String   @default("DRAFT")
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataContractVersion {
+  id          String   @id @default(uuid())
+  contractId  String
+  workspaceId String
+  version      String
+  schemaJson   String
+  isActive     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ContractValidation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  contractId  String
+  versionId   String
+  payloadId   String
+  isValid     Boolean
+  errorsJson  String?
+  checkedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ChangeFeed {
+  id          String   @id @default(uuid())
+  workspaceId String
+  tableName   String
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ChangeSubscription {
+  id          String   @id @default(uuid())
+  workspaceId String
+  feedId      String
+  consumerName String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ChangeCheckpoint {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  subscriptionId String
+  sequenceNumber String
+  updatedAt      DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model MasterEntity {
+  id          String   @id @default(uuid())
+  workspaceId String
+  domainName   String   // Customer, Product, Employee
+  externalId   String
+  payloadJson  String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model MasterEntityVersion {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  masterEntityId String
+  version        Int
+  payloadJson    String
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model MasterRelationship {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  sourceEntityId String
+  targetEntityId String
+  relationType   String
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model GoldenRecord {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  domainName     String
+  mergedPayload  String
+  sourceEntities String   // JSON array of source IDs
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DuplicateCandidate {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  domainName       String
+  entityIdA        String
+  entityIdB        String
+  confidenceScore  Float
+  status           String   @default("PENDING") // PENDING, RESOLVED, IGNORED
+  createdAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model MergeOperation {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  goldenRecordId String
+  rolledBack     Boolean  @default(false)
+  auditLogJson   String
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataSteward {
+  id          String   @id @default(uuid())
+  workspaceId String
+  userId       String
+  roleName     String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model StewardAssignment {
+  id          String   @id @default(uuid())
+  workspaceId String
+  stewardId    String
+  domainName   String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model StewardApproval {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  assignmentId   String
+  targetChangeId String
+  status         String   @default("PENDING")
+  decidedAt      DateTime?
+
+  @@index([workspaceId])
+}
+
+model MaskingRule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  columnPath   String
+  maskType     String   // REDACT, HASH, PARTIAL
+  isActive     Boolean  @default(true)
+
+  @@index([workspaceId])
+}
+
+model TokenizationRule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  columnPath   String
+  vaultToken   String
+  isActive     Boolean  @default(true)
+
+  @@index([workspaceId])
+}
+
+model AnonymizationPolicy {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  rulesJson    String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataDomain {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String   // HR, Finance, etc.
+  description  String?
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataCatalog {
+  id          String   @id @default(uuid())
+  workspaceId String
+  tableName    String
+  schemaJson   String
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model DataClassification {
+  id          String   @id @default(uuid())
+  workspaceId String
+  targetPath   String
+  sensitivity  String   // PUBLIC, CONFIDENTIAL, RESTRICTED
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model DataQualityRule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  ruleType     String   // NOT_NULL, VALID_EMAIL, etc.
+  paramsJson   String   @default("{}")
+
+  @@index([workspaceId])
+}
+
+model DataQualityResult {
+  id          String   @id @default(uuid())
+  workspaceId String
+  ruleId       String
+  passedCount  Int
+  failedCount  Int
+  runAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataLineage {
+  id          String   @id @default(uuid())
+  workspaceId String
+  sourcePath   String
+  targetPath   String
+  transformRule String?
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model MetadataAttribute {
+  id          String   @id @default(uuid())
+  workspaceId String
+  targetPath   String
+  key          String
+  value        String
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model BusinessGlossary {
+  id          String   @id @default(uuid())
+  workspaceId String
+  term         String
+  definition   String
+  ownerId      String?
+
+  @@index([workspaceId])
+}
+
+model DataObservabilityMetric {
+  id          String   @id @default(uuid())
+  workspaceId String
+  metricType   String   // FRESHNESS, COMPLETENESS, DRIFT
+  value        Float
+  recordedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataProduct {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  description  String?
+  status       String   @default("ACTIVE")
+
+  @@index([workspaceId])
+}
+
+model DataProductVersion {
+  id             String   @id @default(uuid())
+  dataProductId  String
+  workspaceId    String
+  version        String
+  schemaJson     String
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataProductOwner {
+  id             String   @id @default(uuid())
+  dataProductId  String
+  workspaceId    String
+  ownerUserId    String
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataPlatformRetentionPolicy {
+  id          String   @id @default(uuid())
+  workspaceId String
+  targetTable  String
+  retentionDays Int
+  action       String   // PURGE, ARCHIVE
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ArchivePolicy {
+  id          String   @id @default(uuid())
+  workspaceId String
+  targetTable  String
+  destination  String
+  archiveAfter Int
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PurgeJob {
+  id          String   @id @default(uuid())
+  workspaceId String
+  policyId     String
+  recordsPurged Int
+  runAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ReconciliationRule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  ruleName     String
+  sourceExpr   String
+  targetExpr   String
+  tolerance    Float
+
+  @@index([workspaceId])
+}
+
+model ReconciliationRun {
+  id          String   @id @default(uuid())
+  workspaceId String
+  ruleId       String
+  status       String   @default("PASSED")
+  discrepancy  Float
+  runAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model MarketplaceDataset {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  description  String
+  price        Float    @default(0.0)
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model AccessRequest {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  requestorId  String
+  status       String   @default("PENDING")
+  requestedAt  DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model IntegrationSla {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  latencyMs    Int
+  throughput   Int
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorMetric {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId  String
+  latencyMs    Int
+  throughput   Int
+  errorRate    Float
+  recordedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataDomainOwner {
+  id          String   @id @default(uuid())
+  workspaceId String
+  domainName   String
+  userId       String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DomainPolicy {
+  id          String   @id @default(uuid())
+  workspaceId String
+  domainName   String
+  policyRule   String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DomainContract {
+  id          String   @id @default(uuid())
+  workspaceId String
+  domainName   String
+  contractId   String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model LakehouseDataset {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  format       String   // PARQUET, DELTA, ICEBERG
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ParquetSnapshot {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  filePath     String
+  recordedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model IcebergTable {
+  id          String   @id @default(uuid())
+  workspaceId String
+  tableName    String
+  metadataPath String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model SemanticModel {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  mappingJson  String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model BusinessMetric {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String   // ARR, LTV
+  formula      String
+  dimensionId  String?
+
+  @@index([workspaceId])
+}
+
+model Dimension {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String   // Time, Geography
+  columnPath   String
+
+  @@index([workspaceId])
+}
+
+model Measure {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  formula      String
+
+  @@index([workspaceId])
+}
+
+model SchemaScanner {
+  id          String   @id @default(uuid())
+  workspaceId String
+  scannerName  String
+  connectionId String
+  isActive     Boolean  @default(true)
+
+  @@index([workspaceId])
+}
+
+model DriftAlert {
+  id          String   @id @default(uuid())
+  workspaceId String
+  scannerId    String
+  tableName    String
+  driftType    String   // COLUMN_ADDED, COLUMN_REMOVED, TYPE_CHANGED
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model SandboxConfig {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  configJson   String   @default("{}")
+
+  @@index([workspaceId])
+}
+
+model SandboxRun {
+  id          String   @id @default(uuid())
+  workspaceId String
+  configId     String
+  status       String   @default("PASSED")
+  logs         String
+  runAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataApi {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  path         String
+  method       String   @default("GET")
+  status       String   @default("ACTIVE")
+
+  @@index([workspaceId])
+}
+
+model DataApiVersion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  apiId        String
+  version      String
+  schemaJson   String
+
+  @@index([workspaceId])
+}
+
+model ApiConsumer {
+  id          String   @id @default(uuid())
+  workspaceId String
+  apiId        String
+  consumerName String
+  token        String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ApiUsageMetric {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  apiId        String
+  consumerId   String
+  responseTime Int
+  statusCode   Int
+  calledAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model SharingAgreement {
+  id          String   @id @default(uuid())
+  workspaceId String
+  partyA       String
+  partyB       String
+  datasetId    String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model SharingPolicy {
+  id          String   @id @default(uuid())
+  workspaceId String
+  agreementId  String
+  policyJson   String
+
+  @@index([workspaceId])
+}
+
+model DataLicense {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  licenseType  String
+  terms        String
+
+  @@index([workspaceId])
+}
+
+model StorageCost {
+  id          String   @id @default(uuid())
+  workspaceId String
+  domainName   String
+  cost         Float
+  recordedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ComputeCost {
+  id          String   @id @default(uuid())
+  workspaceId String
+  jobName      String
+  cost         Float
+  recordedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PipelineCost {
+  id          String   @id @default(uuid())
+  workspaceId String
+  pipelineId  String
+  cost         Float
+  recordedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ReliabilityScore {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  score        Float
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model ReliabilityIncident {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  title        String
+  description  String
+  status       String   @default("OPEN")
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model FederationSource {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  type         String   // TRINO, PRESTO, POSTGRES
+  configJson   String   @default("{}")
+
+  @@index([workspaceId])
+}
+
+model FederationQuery {
+  id          String   @id @default(uuid())
+  workspaceId String
+  sourceId     String
+  queryText    String
+  runTimeMs    Int
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model FederationCache {
+  id          String   @id @default(uuid())
+  workspaceId String
+  queryKey     String
+  resultData   String
+  expiresAt    DateTime
+
+  @@index([workspaceId])
+}
+
+model ContractTestSuite {
+  id          String   @id @default(uuid())
+  workspaceId String
+  contractId  String
+  name         String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ContractAssertion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  suiteId      String
+  assertion    String
+  isActive     Boolean  @default(true)
+
+  @@index([workspaceId])
+}
+
+model ContractReport {
+  id          String   @id @default(uuid())
+  workspaceId String
+  suiteId      String
+  status       String   @default("PASSED")
+  runAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DatasetSla {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  metric       String   // FRESHNESS, ACCURACY
+  threshold    Float
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model FreshnessPolicy {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  maxAgeMinutes Int
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model AvailabilityPolicy {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  uptimePct    Float
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DatasetUsageLog {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  userId       String
+  actionType   String   // READ, WRITE
+  accessedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PopularQuery {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  queryString  String
+  runCount     Int
+
+  @@index([workspaceId])
+}
+
+model ConsumerStatistic {
+  id          String   @id @default(uuid())
+  workspaceId String
+  datasetId    String
+  consumerId   String
+  readCount    Int
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model AutoLineageRun {
+  id          String   @id @default(uuid())
+  workspaceId String
+  status       String   @default("SUCCESS")
+  linksFound   Int
+  runAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model InferredLineageLink {
+  id          String   @id @default(uuid())
+  workspaceId String
+  runId        String
+  sourcePath   String
+  targetPath   String
+  confidence   Float
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ReverseEtlPipeline {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  sourceTable  String
+  targetId     String
+  status       String   @default("ACTIVE")
+
+  @@index([workspaceId])
+}
+
+model ReverseEtlRun {
+  id          String   @id @default(uuid())
+  workspaceId String
+  pipelineId   String
+  recordsSynced Int
+  status       String   @default("SUCCESS")
+  runAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model SyncTarget {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  type         String   // HUBSPOT, SALESFORCE
+  configJson   String   @default("{}")
+
+  @@index([workspaceId])
+}
+
+model Feature {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  type         String   // DOUBLE, STRING
+  entityId     String
+
+  @@index([workspaceId])
+}
+
+model FeatureGroup {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  entityName   String
+  featuresList String   // JSON array of feature IDs
+
+  @@index([workspaceId])
+}
+
+model OnlineFeatureCache {
+  id          String   @id @default(uuid())
+  workspaceId String
+  featureKey   String
+  featureValue String
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model VirtualQueryPlan {
+  id          String   @id @default(uuid())
+  workspaceId String
+  queryString  String
+  planJson     String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model QueryExecutionNode {
+  id          String   @id @default(uuid())
+  workspaceId String
+  planId       String
+  nodeType     String   // SCAN, JOIN, FILTER
+  durationMs   Int
+
+  @@index([workspaceId])
+}
+
+model SearchIndexConfig {
+  id          String   @id @default(uuid())
+  workspaceId String
+  indexName    String
+  fieldsJson   String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model SearchIndexJob {
+  id          String   @id @default(uuid())
+  workspaceId String
+  configId     String
+  status       String   @default("SUCCESS")
+  indexedCount Int
+  runAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model CanonicalEntity {
+  id          String   @id @default(uuid())
+  workspaceId String
+  entityName   String
+  definition   String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model CanonicalMapping {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  canonicalId    String
+  externalSource String
+  mappingJson    String
+
+  @@index([workspaceId])
+}
+
+model TransformationRule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  formula      String
+
+  @@index([workspaceId])
+}
+
+model SchemaRegistry {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  status       String   @default("ACTIVE")
+
+  @@index([workspaceId])
+}
+
+model SchemaVersion {
+  id          String   @id @default(uuid())
+  registryId  String
+  workspaceId String
+  version      String
+  schemaJson   String
+
+  @@index([workspaceId])
+}
+
+model StreamTopic {
+  id          String   @id @default(uuid())
+  workspaceId String
+  topicName    String
+  partitions   Int      @default(1)
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model StreamConsumer {
+  id          String   @id @default(uuid())
+  workspaceId String
+  groupName    String
+  topicId      String
+  isActive     Boolean  @default(true)
+
+  @@index([workspaceId])
+}
+
+model StreamOffset {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  consumerId     String
+  partition      Int
+  offsetValue    Int
+  updatedAt      DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model StreamCheckpoint {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  consumerId     String
+  checkpointData String
+  updatedAt      DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model ReplayJob {
+  id          String   @id @default(uuid())
+  workspaceId String
+  topicId      String
+  startOffset  Int
+  endOffset    Int
+  status       String   @default("SUCCESS")
+
+  @@index([workspaceId])
+}
+
+model EtlPipeline {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  sourceConnId String
+  targetConnId String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EtlPipelineRun {
+  id          String   @id @default(uuid())
+  workspaceId String
+  pipelineId   String
+  status       String   @default("SUCCESS")
+  recordsCount Int
+  runAt        DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EtlPipelineTemplate {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  configJson   String
+
+  @@index([workspaceId])
+}
+
+model EtlDataset {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name         String
+  type         String   // FILE, TABLE
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EtlDatasetVersion {
+  id          String   @id @default(uuid())
+  datasetId    String
+  workspaceId String
+  version      String
+  metadataJson String
+
+  @@index([workspaceId])
+}
+
+model Application {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  status      String   @default("DRAFT")
+  configJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model ApplicationVersion {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  version       String
+  metadataJson  String   @default("{}")
+  status        String   @default("DRAFT")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationModule {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  name          String
+  description   String?
+  configJson    String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationPage {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  moduleId      String?
+  path          String
+  name          String
+  layoutSchema  String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationNavigation {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  structureJson String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationComponent {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  pageId        String?
+  name          String
+  type          String
+  paramsJson    String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationDatasource {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  name          String
+  type          String
+  configJson    String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationAction {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  componentId   String?
+  triggerEvent  String
+  rulesJson     String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationPermission {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  role          String
+  actionsJson   String   @default("[]")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationTheme {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  brandingJson  String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationLocalization {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  locale        String
+  translations  String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationPackage {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  version       String
+  bundleJson    String   @default("{}")
+  signature     String?
+  publicKey     String?
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model MarketplaceApplication {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  name           String
+  description    String?
+  publisher      String
+  version        String
+  packageJson    String   @default("{}")
+  price          Float    @default(0.0)
+  signature      String?
+  isApproved     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model MarketplacePurchase {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  blueprintId   String
+  licenseKey    String
+  amountPaid    Float    @default(0.0)
+  purchasedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ApplicationAudit {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  userId        String
+  actionType    String
+  details       String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationAnalytics {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  sessionId     String
+  latencyMs     Int
+  errorCount    Int      @default(0)
+  detailsJson   String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationEntity {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  name          String
+  description   String?
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationField {
+  id          String   @id @default(uuid())
+  workspaceId String
+  entityId    String
+  name        String
+  type        String
+  constraints String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([entityId])
+}
+
+model ApplicationRelationship {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  fromEntityId  String
+  toEntityId    String
+  type          String
+  configJson    String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model ApplicationIndex {
+  id          String   @id @default(uuid())
+  workspaceId String
+  entityId    String
+  name        String
+  fieldsList  String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([entityId])
+}
+
+model ApplicationValidationRule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  entityId    String
+  fieldName   String
+  ruleType    String
+  ruleConfig  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([entityId])
+}
+
+model BusinessObject {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  name          String
+  entitiesList  String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model BusinessObjectAction {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  businessObjectId String
+  name             String
+  actionType       String
+  configJson       String   @default("{}")
+  createdAt        DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([businessObjectId])
+}
+
+model BusinessObjectPolicy {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  businessObjectId String
+  role             String
+  policyJson       String   @default("{}")
+  createdAt        DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([businessObjectId])
+}
+
+model BusinessObjectLifecycle {
+  id               String   @id @default(uuid())
+  workspaceId      String
+  businessObjectId String
+  statesJson       String   @default("{}")
+  currentState     String   @default("DRAFT")
+  createdAt        DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([businessObjectId])
+}
+
+model FormDefinition {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  name          String
+  layoutJson    String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model FormFieldDefinition {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  formId         String
+  fieldName      String
+  fieldType      String
+  configJson     String   @default("{}")
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([formId])
+}
+
+model FormLayoutDefinition {
+  id          String   @id @default(uuid())
+  workspaceId String
+  formId      String
+  gridConfig  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([formId])
+}
+
+model VisualQueryDefinition {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  name          String
+  projections   String   @default("[]")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model QueryJoin {
+  id          String   @id @default(uuid())
+  workspaceId String
+  queryId     String
+  fromTable   String
+  toTable     String
+  joinType    String
+  onCondition String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([queryId])
+}
+
+model QueryFilter {
+  id          String   @id @default(uuid())
+  workspaceId String
+  queryId     String
+  fieldName   String
+  operator    String
+  value       String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([queryId])
+}
+
+model QueryAggregation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  queryId     String
+  fieldName   String
+  aggType     String
+  aliasName   String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([queryId])
+}
+
+model DashboardDefinition {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  name          String
+  layoutSchema  String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model DashboardWidget {
+  id          String   @id @default(uuid())
+  workspaceId String
+  dashboardId String
+  name        String
+  widgetType  String
+  configJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([dashboardId])
+}
+
+model DashboardFilter {
+  id          String   @id @default(uuid())
+  workspaceId String
+  dashboardId String
+  filterType  String
+  configJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([dashboardId])
+}
+
+model MetadataCommit {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  branchId      String
+  commitMessage String
+  snapshotJson  String   @default("{}")
+  author        String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model MetadataBranch {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  name          String
+  lastCommitId  String?
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model MetadataMergeConflict {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  sourceBranch  String
+  targetBranch  String
+  conflictJson  String   @default("{}")
+  status        String   @default("OPEN")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model StudioSession {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  userId        String
+  status        String   @default("ACTIVE")
+  lastActiveAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model StudioComment {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  canvasNodeId  String?
+  userId        String
+  commentText   String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model DesignToken {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  applicationId String
+  tokenName     String
+  tokenValue    String
+  tokenType     String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([applicationId])
+}
+
+model PartnerExtensionManifest {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  name          String
+  version       String
+  publisher     String
+  configSchema  String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PartnerExtensionLifecycle {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  extensionId   String
+  status        String
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PartnerExtensionBridge {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  extensionId   String
+  channelName   String
+  bridgeConfig  String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PartnerExtensionPermission {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  extensionId   String
+  scope         String
+  isGranted     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PartnerExtensionAPI {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  extensionId   String
+  endpointPath  String
+  method        String   @default("POST")
+  configJson    String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PartnerExtensionRegistry {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  name          String
+  registryUrl   String
+  authConfig    String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model Connector {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  category    String
+  status      String   @default("INACTIVE")
+  configJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorVersion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  version     String
+  bundleJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorCategory {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorCredential {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  authType    String
+  credentialJson String @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorSecret {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  secretKey   String
+  secretValue String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorHealth {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  status      String
+  latencyMs   Int
+  errorMsg    String?
+  checkedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorUsage {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  apiCalls    Int      @default(0)
+  bytesSent   BigInt   @default(0)
+  recordedAt  DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorPermission {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  scope       String
+  isAllowed   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorAudit {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  userId      String
+  action      String
+  details     String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorManifest {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  schemaJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorCapability {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  connectorId  String
+  name         String
+  description  String?
+  type         String
+  configSchema String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorTrigger {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  eventKey    String
+  configJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorAction {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  name        String
+  payloadType String
+  configJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorWebhook {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  webhookUrl  String
+  secretToken String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorAuthentication {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  authFlow    String
+  settings    String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model ConnectorTestSuite {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  testCount   Int      @default(0)
+  resultsJson String   @default("{}")
+  runAt       DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model IntegrationCatalog {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model IntegrationTag {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  tagValue      String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationId])
+}
+
+model IntegrationOwner {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  userId        String
+  role          String   @default("OWNER")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationId])
+}
+
+model IntegrationEnvironment {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  envName       String
+  configJson    String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationId])
+}
+
+model IntegrationDependency {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  dependsOnId   String
+  dependencyType String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationId])
+}
+
+model IntegrationDocumentation {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  markdownText  String
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationId])
+}
+
+model IntegrationApproval {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  status        String
+  requestedBy   String
+  approvedBy    String?
+  comments      String?
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationId])
+}
+
+model SecretRotationPolicy {
+  id          String   @id @default(uuid())
+  workspaceId String
+  secretKey   String
+  intervalDays Int      @default(90)
+  lastRotated DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorCertification {
+  id          String   @id @default(uuid())
+  workspaceId String
+  connectorId String
+  status      String
+  verifiedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model IntegrationComplianceCheck {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  status        String
+  scanLogs      String
+  checkedAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationId])
+}
+
+model IntegrationSecurityScan {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  vulnerabilities Int    @default(0)
+  status        String
+  checkedAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationId])
+}
+
+model ApiDeprecationLifecycle {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  apiProductId  String
+  status        String
+  deprecatedAt  DateTime?
+  retiredAt     DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([apiProductId])
+}
+
+model VersionCompatibilityReport {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  connectorId   String
+  versionFrom   String
+  versionTo     String
+  isCompatible  Boolean  @default(true)
+  reportDetails String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([connectorId])
+}
+
+model IntegrationFlow {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model IntegrationFlowVersion {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  integrationFlowId  String
+  version            String
+  flowJson           String   @default("{}")
+  createdAt          DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationFlowId])
+}
+
+model IntegrationNode {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  integrationFlowId  String
+  nodeType           String
+  configJson         String   @default("{}")
+  createdAt          DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationFlowId])
+}
+
+model IntegrationEdge {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  integrationFlowId  String
+  sourceNodeId       String
+  targetNodeId       String
+  conditionExpression String?
+  createdAt          DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationFlowId])
+}
+
+model IntegrationFlowExecution {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  integrationFlowId  String
+  status             String   @default("RUNNING")
+  startedAt          DateTime @default(now())
+  completedAt        DateTime?
+  errorMsg           String?
+
+  @@index([workspaceId])
+  @@index([integrationFlowId])
+}
+
+model IntegrationExecutionStep {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  executionId   String
+  nodeId        String
+  status        String
+  durationMs    Int
+  inputPayload  String
+  outputPayload String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([executionId])
+}
+
+model IntegrationVariable {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  integrationFlowId  String
+  varName            String
+  varType            String
+  varValue           String
+  createdAt          DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationFlowId])
+}
+
+model IntegrationFlowSchedule {
+  id                 String   @id @default(uuid())
+  workspaceId        String
+  integrationFlowId  String
+  cronExpression     String
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([integrationFlowId])
+}
+
+model IntegrationTemplate {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  flowJson    String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ApiProduct {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  apisList    String
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ApiPlan {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  apiProductId String
+  name         String
+  rateLimit    Int      @default(1000)
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([apiProductId])
+}
+
+model ApiGatewayConsumer {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  consumerName String
+  apiKey       String   @unique
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ApiSubscription {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  apiProductId String
+  planId       String
+  consumerId   String
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([apiProductId])
+}
+
+model ApiToken {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  consumerId   String
+  tokenString  String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([consumerId])
+}
+
+model ApiRateLimit {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  consumerId   String
+  apiProductId String
+  requestCount Int      @default(0)
+  resetTime    DateTime
+  updatedAt    DateTime @updatedAt
+
+  @@index([workspaceId])
+  @@index([consumerId])
+}
+
+model ApiUsage {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  apiProductId String
+  consumerId   String
+  endpoint     String
+  method       String
+  statusCode   Int
+  responseTime Int
+  calledAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([apiProductId])
+}
+
+model ApiAnalytics {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  apiProductId String
+  totalCalls   Int      @default(0)
+  avgLatencyMs Int      @default(0)
+  errorRate    Float    @default(0.0)
+  recordedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EventTopic {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String   @unique
+  partitions  Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EventPartition {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  topicId        String
+  partitionIndex Int
+  leaderNode     String
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([topicId])
+}
+
+model EventConsumerGroup {
+  id          String   @id @default(uuid())
+  workspaceId String
+  topicId     String
+  name        String
+  activeHosts String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([topicId])
+}
+
+model EventMessage {
+  id          String   @id @default(uuid())
+  workspaceId String
+  topicId     String
+  partition   Int      @default(0)
+  offset      BigInt
+  key         String?
+  payload     String
+  timestamp   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([topicId])
+}
+
+model EventReplay {
+  id          String   @id @default(uuid())
+  workspaceId String
+  topicId     String
+  consumerId  String
+  startOffset BigInt
+  endOffset   BigInt
+  status      String   @default("RUNNING")
+  runAt       DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DeadLetterQueue {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  topicId      String
+  messageIndex BigInt
+  errorMsg     String
+  payload      String
+  status       String   @default("PENDING")
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EventOffset {
+  id          String   @id @default(uuid())
+  workspaceId String
+  consumerId  String
+  topicId     String
+  partition   Int
+  offsetValue BigInt
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model DataPipeline {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  description String?
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model PipelineRun {
+  id          String   @id @default(uuid())
+  workspaceId String
+  pipelineId  String
+  status      String   @default("RUNNING")
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([workspaceId])
+  @@index([pipelineId])
+}
+
+model PipelineStep {
+  id          String   @id @default(uuid())
+  workspaceId String
+  pipelineId  String
+  stepIndex   Int
+  name        String
+  actionType  String
+  configJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([pipelineId])
+}
+
+model Transformation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  formula     String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DataMapping {
+  id          String   @id @default(uuid())
+  workspaceId String
+  pipelineId  String
+  sourceField String
+  targetField String
+  rulesJson   String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([pipelineId])
+}
+
+model DataValidation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  pipelineId  String
+  fieldName   String
+  ruleType    String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([pipelineId])
+}
+
+model PipelineSchedule {
+  id             String   @id @default(uuid())
+  workspaceId    String
+  pipelineId     String
+  cronExpression String
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([pipelineId])
+}
+
+model IdpDocumentTemplate {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  coordsJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model OCRDocument {
+  id          String   @id @default(uuid())
+  workspaceId String
+  fileName    String
+  fileUrl     String
+  rawText     String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model OCRField {
+  id          String   @id @default(uuid())
+  workspaceId String
+  documentId  String
+  fieldName   String
+  fieldValue  String
+  confidence  Float    @default(1.0)
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([documentId])
+}
+
+model ExtractionRule {
+  id          String   @id @default(uuid())
+  workspaceId String
+  templateId  String
+  regexPattern String
+  fieldName   String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([templateId])
+}
+
+model ClassificationModel {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  labelsJson  String   @default("[]")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model DocumentProcessingRun {
+  id          String   @id @default(uuid())
+  workspaceId String
+  documentId  String
+  status      String   @default("COMPLETED")
+  logs        String
+  processedAt DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([documentId])
+}
+
+model RPABot {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  status      String   @default("IDLE")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model RPABotRun {
+  id          String   @id @default(uuid())
+  workspaceId String
+  botId       String
+  status      String   @default("SUCCESS")
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([workspaceId])
+  @@index([botId])
+}
+
+model RPABotStep {
+  id          String   @id @default(uuid())
+  workspaceId String
+  botId       String
+  stepIndex   Int
+  action      String
+  targetPath  String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([botId])
+}
+
+model DesktopAutomation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  botId       String
+  osName      String
+  scriptText  String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([botId])
+}
+
+model BrowserAutomation {
+  id          String   @id @default(uuid())
+  workspaceId String
+  botId       String
+  targetUrl   String
+  scriptJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([botId])
+}
+
+model AutomationAsset {
+  id          String   @id @default(uuid())
+  workspaceId String
+  botId       String
+  key         String
+  value       String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([botId])
+}
+
+model TradingPartner {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  as2Id       String
+  ediId       String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model EDIProfile {
+  id          String   @id @default(uuid())
+  workspaceId String
+  partnerId   String
+  schemaType  String
+  version     String
+  settingsJson String  @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([partnerId])
+}
+
+model EDIMessage {
+  id          String   @id @default(uuid())
+  workspaceId String
+  partnerId   String
+  direction   String
+  payload     String
+  status      String   @default("ACCEPTED")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([partnerId])
+}
+
+model EDIBatch {
+  id          String   @id @default(uuid())
+  workspaceId String
+  partnerId   String
+  messageIds  String
+  status      String   @default("PROCESSED")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([partnerId])
+}
+
+model AS2Configuration {
+  id           String   @id @default(uuid())
+  workspaceId  String
+  partnerId    String
+  targetUrl    String
+  cipherSuite  String
+  encryptionCert String
+  createdAt    DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([partnerId])
+}
+
+model SyncProfile {
+  id          String   @id @default(uuid())
+  workspaceId String
+  sourceConn  String
+  targetConn  String
+  syncMode    String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model SyncJob {
+  id          String   @id @default(uuid())
+  workspaceId String
+  profileId   String
+  status      String   @default("RUNNING")
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([workspaceId])
+  @@index([profileId])
+}
+
+model SyncConflict {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  jobId         String
+  entityType    String
+  entityId      String
+  sourcePayload String
+  targetPayload String
+  status        String   @default("UNRESOLVED")
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+  @@index([jobId])
+}
+
+model SyncResolution {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  conflictId    String
+  resolutionMode String
+  mergedPayload String
+  resolvedAt    DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorMarketplace {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  publisher   String
+  packageUrl  String
+  rating      Float    @default(5.0)
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorInstallation {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  marketplaceId String
+  installedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorReview {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  marketplaceId String
+  reviewerName  String
+  comment       String
+  rating        Int
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorAnalytics {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  marketplaceId String
+  downloadCount Int      @default(0)
+  activeInstalls Int     @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@index([workspaceId])
+}
+
+model SecretProvider {
+  id          String   @id @default(uuid())
+  workspaceId String
+  provider    String
+  configJson  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model VaultProvider {
+  id          String   @id @default(uuid())
+  workspaceId String
+  vaultUrl    String
+  authConfig  String   @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model SecretRotationJob {
+  id          String   @id @default(uuid())
+  workspaceId String
+  secretName  String
+  status      String   @default("SUCCESS")
+  rotatedAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model CertificateStore {
+  id          String   @id @default(uuid())
+  workspaceId String
+  alias       String
+  certData    String
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model CertificateAuthority {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  rootCert    String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model KeyManagement {
+  id          String   @id @default(uuid())
+  workspaceId String
+  keyAlias    String
+  algorithm   String   @default("AES-256")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model IntegrationTest {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  integrationId String
+  testName      String
+  status        String   @default("PASSED")
+  runAt         DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model ConnectorMock {
+  id            String   @id @default(uuid())
+  workspaceId   String
+  connectorId   String
+  matchingRule  String   @default("{}")
+  responseBody  String
+  createdAt     DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model MockResponse {
+  id          String   @id @default(uuid())
+  workspaceId String
+  mockId      String
+  statusCode  Int      @default(200)
+  headers     String   @default("{}")
+  body        String
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model TestScenario {
+  id          String   @id @default(uuid())
+  workspaceId String
+  name        String
+  stepsJson   String   @default("[]")
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+model TestAssertion {
+  id          String   @id @default(uuid())
+  workspaceId String
+  scenarioId  String
+  stepIndex   Int
+  assertionRule String
+  passed      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId])
+}
+
+
+
 
 
 

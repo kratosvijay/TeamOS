@@ -1,0 +1,24 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ReconciliationService } from '../reconciliation.service';
+import { PrismaService } from '../../prisma/prisma.service';
+
+describe('ReconciliationService', () => {
+  let service: ReconciliationService;
+
+  const mockPrisma = {};
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        ReconciliationService,
+        { provide: PrismaService, useValue: mockPrisma },
+      ],
+    }).compile();
+
+    service = module.get<ReconciliationService>(ReconciliationService);
+  });
+
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
+});

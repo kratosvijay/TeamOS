@@ -28,4 +28,23 @@ export class MarketplaceController {
       permission || IntegrationPermission.READ_ONLY,
     );
   }
+
+  @Post('uninstall')
+  async uninstall(
+    @Headers('x-workspace-id') workspaceId: string,
+    @Body('extensionId') extensionId: string,
+  ) {
+    return this.marketplaceService.uninstallMarketplaceIntegration(workspaceId, extensionId);
+  }
+
+  @Post('review')
+  async review(
+    @Req() req: any,
+    @Body('appId') appId: string,
+    @Body('rating') rating: number,
+    @Body('reviewText') reviewText: string,
+  ) {
+    const reviewerName = req.user?.name || req.user?.email || 'Anonymous Developer';
+    return this.marketplaceService.addReview(appId, reviewerName, rating, reviewText);
+  }
 }

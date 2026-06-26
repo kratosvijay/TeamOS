@@ -1,0 +1,22 @@
+name: Security Audits
+
+on:
+  schedule:
+    - cron: '0 0 * * 1' # Every Monday at midnight
+  push:
+    branches: [ main ]
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run audit on Backend
+      run: |
+        cd backend
+        npm audit --audit-level=high
+    - name: Run static analysis on infra
+      uses: bridgecrewio/checkov-action@master
+      with:
+        directory: infra/
+        framework: terraform,kubernetes

@@ -1,0 +1,65 @@
+# TeamOS Helm values
+global:
+  environment: production
+  domain: teamos.com
+
+backend:
+  replicaCount: 3
+  image:
+    repository: teamos/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1024Mi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  serviceMesh:
+    enabled: true
+    mtlsMode: STRICT
+  canary:
+    enabled: true
+    weight: 10
+
+frontend:
+  replicaCount: 2
+  image:
+    repository: teamos/frontend
+    tag: latest
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+
+postgres:
+  enabled: true
+  persistence:
+    size: 20Gi
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2048Mi
+
+redis:
+  enabled: true
+  sentinel:
+    enabled: true
+
+opensearch:
+  enabled: true
+  clusterSize: 3
+
+monitoring:
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true
+  loki:
+    enabled: true
+  tempo:
+    enabled: true

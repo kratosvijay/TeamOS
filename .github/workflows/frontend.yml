@@ -1,0 +1,34 @@
+name: Frontend CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'TeamOS-app/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'TeamOS-app/**'
+
+jobs:
+  flutter-test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.x'
+        channel: 'stable'
+    - name: Install dependencies
+      run: |
+        cd TeamOS-app
+        flutter pub get
+    - name: Analyze code
+      run: |
+        cd TeamOS-app
+        flutter analyze
+    - name: Run Tests
+      run: |
+        cd TeamOS-app
+        flutter test

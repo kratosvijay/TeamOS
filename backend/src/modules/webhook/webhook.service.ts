@@ -65,6 +65,17 @@ export class WebhookService {
     });
     if (!webhook || webhook.status !== 'ACTIVE') return;
 
+    // Event filtering: check WebhookSubscription table
+    const sub = await this.prisma.webhookSubscription.findFirst({
+      where: { workspaceId: webhook.workspaceId, url: webhook.url },
+    });
+    if (sub && sub.events && sub.events.length > 0) {
+      if (!sub.events.includes(event) && !sub.events.includes('*')) {
+        console.log(`Webhook Event ${event} filtered out for ${webhook.url}`);
+        return;
+      }
+    }
+
     const payloadString = JSON.stringify(payload);
     const signature = crypto.createHmac('sha256', webhook.secret).update(payloadString).digest('hex');
 

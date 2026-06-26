@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationService } from '../integration/integration.service';
 import { IntegrationPermission } from '@prisma/client';
@@ -11,7 +11,7 @@ export class MarketplaceService {
   ) {}
 
   async getCatalog() {
-    return [
+    const hardcoded = [
       {
         id: 'market-github',
         provider: 'GITHUB',
@@ -22,6 +22,7 @@ export class MarketplaceService {
         version: '1.2.0',
         permissionsRequired: ['READ_WRITE', 'ADMIN'],
         author: 'TeamOS Core',
+        downloads: 1540,
       },
       {
         id: 'market-gitlab',
@@ -33,30 +34,29 @@ export class MarketplaceService {
         version: '1.0.5',
         permissionsRequired: ['READ_WRITE'],
         author: 'TeamOS Core',
-      },
-      {
-        id: 'market-google',
-        provider: 'GOOGLE',
-        name: 'Google Workspace',
-        description: 'Synchronize Google Calendar events, Google Drive documents, and Meet appointments',
-        rating: 4.9,
-        category: 'Productivity',
-        version: '2.0.1',
-        permissionsRequired: ['READ_ONLY', 'READ_WRITE'],
-        author: 'TeamOS Core',
-      },
-      {
-        id: 'market-slack',
-        provider: 'SLACK',
-        name: 'Slack Alerts',
-        description: 'Dispatch custom notification alerts, action updates, and daily summaries to Slack channels',
-        rating: 4.7,
-        category: 'Communication',
-        version: '1.5.0',
-        permissionsRequired: ['ADMIN'],
-        author: 'TeamOS Core',
+        downloads: 870,
       },
     ];
+
+    // Fetch approved developer apps from Prisma database
+    const dbApps = await this.prisma.developerApp.findMany({
+      where: { status: 'APPROVED' },
+    });
+
+    const mappedDbApps = dbApps.map((app) => ({
+      id: app.id,
+      provider: app.slug.toUpperCase(),
+      name: app.name,
+      description: app.description,
+      rating: app.rating,
+      category: app.category,
+      version: app.version,
+      permissionsRequired: ['READ_ONLY'],
+      author: app.author,
+      downloads: app.downloads,
+    }));
+
+    return [...hardcoded, ...mappedDbApps];
   }
 
   async installMarketplaceIntegration(
@@ -71,11 +71,75 @@ export class MarketplaceService {
       throw new Error(`Integration for provider ${provider} not found in marketplace`);
     }
 
+    // Verify app database entry and increment downloads
+    const app = await this.prisma.developerApp.findFirst({
+      where: { slug: provider.toLowerCase() },
+    });
+    if (app) {
+      await this.prisma.developerApp.update({
+        where: { id: app.id },
+        data: { downloads: app.downloads + 1 },
+      });
+    }
+
+    // Record installation
+    await this.prisma.installedExtension.create({
+      data: {
+        workspaceId,
+        extensionId: item.id,
+        version: item.version,
+        enabled: true,
+        installedBy: userId,
+      },
+    });
+
     return this.integrationService.installIntegration(workspaceId, userId, {
       provider,
       name: item.name,
       settings: { installedFromMarketplace: true, catalogVersion: item.version },
       permission,
     });
+  }
+
+  async uninstallMarketplaceIntegration(workspaceId: string, extensionId: string) {
+    const installed = await this.prisma.installedExtension.findFirst({
+      where: { workspaceId, extensionId },
+    });
+
+    if (!installed) {
+      throw new BadRequestException('Extension not installed in this workspace');
+    }
+
+    await this.prisma.installedExtension.delete({
+      where: { id: installed.id },
+    });
+
+    return { success: true };
+  }
+
+  async addReview(appId: string, reviewer: string, rating: number, text: string) {
+    // Add review
+    const review = await this.prisma.marketplaceReview.create({
+      data: {
+        appId,
+        reviewer,
+        rating,
+        reviewText: text,
+        status: 'APPROVED',
+      },
+    });
+
+    // Update app rating
+    const allReviews = await this.prisma.marketplaceReview.findMany({
+      where: { appId },
+    });
+    const avgRating = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+
+    await this.prisma.developerApp.update({
+      where: { id: appId },
+      data: { rating: avgRating },
+    });
+
+    return review;
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class FeatureFlagService {
@@ -11,7 +12,6 @@ export class FeatureFlagService {
         workspaceId_key: { workspaceId, key },
       },
     });
-    // Default to true if not explicitly disabled
     return flag ? flag.enabled : true;
   }
 
@@ -23,5 +23,20 @@ export class FeatureFlagService {
       update: { enabled },
       create: { workspaceId, key, enabled },
     });
+  }
+
+  // Enhanced features for Phase 21
+  async evaluateFlag(workspaceId: string, key: string, userId?: string, rolloutPercent = 100): Promise<boolean> {
+    const isGloballyEnabled = await this.isFeatureEnabled(workspaceId, key);
+    if (!isGloballyEnabled) return false; // Kill switch triggered
+
+    if (userId && rolloutPercent < 100) {
+      // Deterministic percentage rollout based on hashing user ID
+      const hash = crypto.createHash('md5').update(userId + key).digest('hex');
+      const score = parseInt(hash.substring(0, 8), 16) % 100;
+      return score < rolloutPercent;
+    }
+
+    return true;
   }
 }
